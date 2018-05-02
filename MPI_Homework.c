@@ -37,6 +37,7 @@ int main(int argc, char **argv) {
 	char reorder = 1;
 	MPI_Comm Grid;
 	int coords[2];
+	int grid_rank;
 
 	// Set up dims array depending on number of procs
 	switch(n_procs) {
@@ -72,8 +73,9 @@ int main(int argc, char **argv) {
 	// Now create the carteesian topology
 	MPI_Cart_create(comm, 2, dims, wrap_around, reorder, &Grid);
 
-	// Now get coordinates
+	// Now get coordinates, rank in new topology
 	MPI_Cart_coords(Grid, rank, 2, coords);
+	MPI_Comm_rank(Grid, &grid_rank);
 
 	/////////////////////////////////////////////////////////////////////////////
 	// Get random seeds on each proc
@@ -168,7 +170,7 @@ int main(int argc, char **argv) {
 	// If not leftmost column in grid: send left border, receive right border
 	if(coords[1] > 0) { // if we have a neighbor to the left
 		// First, get coordiantes of proc to the left of us (in grid) 
-		MPI_Cart_shift(Grid, 1, -1, &rank, &dest_rank);
+		MPI_Cart_shift(Grid, 1, -1, &grid_rank, &dest_rank);
 
 		// Send our left interior column to proc to our left (in grid)
 		MPI_Isend(L_Col_send, N, MPI_FLOAT, dest_rank, 1, comm, &send_req[0]);
@@ -180,7 +182,7 @@ int main(int argc, char **argv) {
 	// If not rightmost column in grid: send right border, receive left border
 	if(coords[1] < (dims[1]-1)) {	// if we have a neighbor to the right 
 		// First, get coordiantes of the proc to the right of us (in grid) 
-		MPI_Cart_shift(Grid, 1, 1, &rank, &dest_rank);
+		MPI_Cart_shift(Grid, 1, 1, &grid_rank, &dest_rank);
 
 		// Send our right interior column to the proc to our right (in grid)
 		MPI_Isend(R_Col_send, N, MPI_FLOAT, dest_rank, 1, comm, &send_req[1]);
@@ -192,7 +194,7 @@ int main(int argc, char **argv) {
 	// If not 1st row in grid: send top border, receive bottom border.
 	if(coords[0] > 0) {	// If we have a neighbor above
 		// First, get coordiantes of proc in previous row (in grid)
-		MPI_Cart_shift(Grid, 0, -1, &rank, &dest_rank);
+		MPI_Cart_shift(Grid, 0, -1, &grid_rank, &dest_rank);
 
 		// Send our top interior row to the proc in previous row (in grid)
 		MPI_Isend(T_Row_send, N, MPI_FLOAT, dest_rank, 1, comm, &send_req[2]);
@@ -204,7 +206,7 @@ int main(int argc, char **argv) {
 	// If not last (bottom) row in grid: send bottom border, receive top border.
 	if(coords[0] < (dims[0]-1)) { // if we have a neighbor below
 		// First, get coordiantes of the proc in next row (in grid)
-		MPI_Cart_shift(Grid, 0, 1, &rank, &dest_rank);
+		MPI_Cart_shift(Grid, 0, 1, &grid_rank, &dest_rank);
 
 		// Send our bottom interior row to the proc in the next row (in grid)
 		MPI_Isend(B_Row_send, N, MPI_FLOAT, dest_rank, 1, comm, &send_req[3]);
@@ -297,9 +299,9 @@ int main(int argc, char **argv) {
 		printf("threshold \t\t\t::\t%f\n",t);
 		printf("Smoothing constants (a,b,c) \t::\t(%f,\t%f,\t%f)\n",a,b,c);
 		printf("Number of elements below threshold (X)\t\t::\t%d\n",count_x);
-		printf("Proportion of elements below threshold (X)\t::\t%f\n",(((float)count_x)/((float)N*N)));
+		printf("Proportion of elements below threshold (X)\t::\t%f\n",(((float)count_x)/((float)n_procs*N*N)));
 		printf("Number of elements below threshold (Y)\t\t::\t%d\n",count_y);
-		printf("Proportion of elements below threshold (Y)\t::\t%f\n",(((float)count_y)/((float)(N-2)*(N-2))));
+		printf("Proportion of elements below threshold (Y)\t::\t%f\n",(((float)count_y)/((float)n_procs*(N-2)*(N-2))));
 
 
 		printf("\n--= Actions =-- \n");

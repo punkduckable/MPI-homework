@@ -4,7 +4,7 @@
 #include "time.h"
 
 // global variables
-#define N  (16384+2)		// number of rows/cols in matrix..
+#define N (16384+2)		// number of rows/cols in matrix..
 
 // Prototypes
 void Initialize(float *x, unsigned int n);
@@ -228,36 +228,36 @@ int main(int argc, char **argv) {
 	//------------------------------------------------------------------
 	// splice received borders into x array
 
-	if(coords[1] > 0) {			// Case for not leftmost column
+	if(coords[1] > 0) {			// if not leftmost column
 		// In this case, we received the right column of the proc to our left
 		// We want to store this in our left row
-		for(int i = 0; i < N; i++) {
+		for(i = 0; i < N; i++) {
 			x[i*N+0] = R_Col_recv[i];
-		} // for(int i = 0; i < N; i++) {
+		} // for(i = 0; i < N; i++) {
 	} // if(coords[1] > 0) {
 
-	if(coords[1] < (dims[1]-1)) {			// Case for not rightmost column
+	if(coords[1] < (dims[1]-1)) { // if not rightmost column
 		// In this case, we received the left column of the proc to our right
 		// We want to store this in our right row
-		for(int i = 0; i < N; i++) {
+		for(i = 0; i < N; i++) {
 			x[i*N+(N-1)] = L_Col_recv[i];
-		} // for(int i = 0; i < N; i++) {
+		} // for(i = 0; i < N; i++) {
 	} // if(coords[1] < (dims[1]-1)) {
 
-	if(coords[0] > 0) {			// Case for not 1st (top) row
+	if(coords[0] > 0) {			// if not 1st (top) row
 		// In this case, we received the bottom row of the proc in the previous row.
 		// We want to store this in our bottom row
-		for(int i = 0; i < N; i++) {
+		for(i = 0; i < N; i++) {
 			x[0*N+i] = B_Row_recv[i];
-		} // for(int i = 0; i < N; i++) {
+		} // for(i = 0; i < N; i++) {
 	} // if(coords[0] > 0) {
 
-	if(coords[0] < (dims[0]-1)) {			// Case for not last (bottom) row
+	if(coords[0] < (dims[0]-1)) {			// if not last (bottom) row
 		// In this case, we received the top row of the proc in the next row.
 		// We want to store this in our top row
-		for(int i = 0; i < N; i++) {
+		for(i = 0; i < N; i++) {
 			x[(N-1)*N+i] = T_Row_recv[i];
-		} // for(int i = 0; i < N; i++) {
+		} // for(i = 0; i < N; i++) {
 	} // if(coords[0] < (dims[0]-1)) {
 
 	////////////////////////////////////////////////////////////////////////////////

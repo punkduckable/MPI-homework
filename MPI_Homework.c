@@ -2,10 +2,10 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "time.h"
-#include "unistd.h"
+//#include "unistd.h"			// For testing
 
 // global variables
-#define N (2+2)		// number of rows/cols in matrix..
+#define N (16384+2)		// number of rows/cols in matrix..
 
 // Prototypes
 void Initialize(float *x, unsigned int n);
@@ -144,8 +144,8 @@ int main(int argc, char **argv) {
 	////////////////////////////////////////////////////////////////////////////////
 	// Smooth the matrix and get local count. 
 
-	sleep(1*rank+1);
-	Print_Matrix(x,y,N);
+	//sleep(1*rank+1);				// For testing
+	//Print_Matrix(x,y,N);
 
 	// Smooth matrix and time it
 	if(rank == root) { timer = clock(); }

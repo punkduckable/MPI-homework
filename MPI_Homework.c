@@ -2,9 +2,10 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "time.h"
+#include "unistd.h"
 
 // global variables
-#define N (16384+2)		// number of rows/cols in matrix..
+#define N (2+2)		// number of rows/cols in matrix..
 
 // Prototypes
 void Initialize(float *x, unsigned int n);
@@ -132,7 +133,7 @@ int main(int argc, char **argv) {
 	if(rank == root) { t_init_x = clock()-timer; }
 
 	////////////////////////////////////////////////////////////////////////////////
-	// Now pass border elements between arrays.
+	// Exchange border elements between procs.
 
 	// Remember that we are really solving this problem on a big grid. In order to 
 	// smooth this grid, we need the grid pieces (the matrix on each proc to agree.
@@ -261,7 +262,126 @@ int main(int argc, char **argv) {
 	} // if(coords[0] < (dims[0]-1)) {
 
 	////////////////////////////////////////////////////////////////////////////////
+	// Exchange corner elements between procs.
+
+	float BR_Corner_Send, BL_Corner_Send, TR_Corner_Send, TL_Corner_Send,
+	BR_Corner_Recv, BL_Corner_Recv, TR_Corner_Recv, TL_Corner_Recv;
+	int dest_coords[2];
+	MPI_Status Corner_Status[8];
+
+	// First, set up send/recv requests. if these are not properly
+	// initialized, bad things happen
+	for(i = 0; i < 4; i++) {
+		send_req[i] = MPI_REQUEST_NULL;
+		recv_req[i] = MPI_REQUEST_NULL;
+	} // for(i = 0; i < 4; i++) {	
+
+	BR_Corner_Send = x[(N-2)*N+(N-2)];
+	BL_Corner_Send = x[(N-2)*N+1];
+	TR_Corner_Send = x[N+(N-2)];
+	TL_Corner_Send = x[N+1];
+
+	//------------------------------------------------------------------------------
+	// Send/Recv corner elements
+
+	// If there is a proc to the bottom right (if not last row or col)
+	if(coords[0] < (dims[0]-1) && coords[1] < (dims[1]-1)) {
+		// Get coords of proc to bottom right 
+		dest_coords[0] = coords[0] + 1;
+		dest_coords[1] = coords[1] + 1;
+		MPI_Cart_rank(Grid, dest_coords, &dest_rank);
+
+		// Send bottom right corner element to proc to our bottom right
+		MPI_Isend(&BR_Corner_Send, 1, MPI_FLOAT, dest_rank, 1, comm, &send_req[0]);
+
+		// Recv top left corner element of proc to our bottom right
+		MPI_Irecv(&TL_Corner_Recv, 1, MPI_FLOAT, dest_rank, 1, comm, &recv_req[0]);
+	} // if(coords[0] < (dims[0]-1) && coords[1] < (dims[1]-1)) {
+
+	// If there is a proc to the bottom left (if not last row or 1st col)
+	if(coords[0] < (dims[0]-1) && coords[1] > 0) {
+		// Get coords of proc to bottom left 
+		dest_coords[0] = coords[0] + 1;
+		dest_coords[1] = coords[1] - 1;
+		MPI_Cart_rank(Grid, dest_coords, &dest_rank);
+
+		// Send bottom left corner element to proc to our bottom left
+		MPI_Isend(&BL_Corner_Send, 1, MPI_FLOAT, dest_rank, 1, comm, &send_req[1]);
+
+		// Recv top right corner element of proc to our bottom left
+		MPI_Irecv(&TR_Corner_Recv, 1, MPI_FLOAT, dest_rank, 1, comm, &recv_req[1]);
+	} // if(coords[0] < (dims[0]-1) && coords[1] > 0) {
+
+	// If there is a proc to the top left (if not first row or last col)
+	if(coords[0] > 0 && coords[1] < (dims[1]-1)) {
+		// Get coords of proc to top right 
+		dest_coords[0] = coords[0] - 1;
+		dest_coords[1] = coords[1] + 1;
+		MPI_Cart_rank(Grid, dest_coords, &dest_rank);
+
+		// Send top right corner element to proc to our top right 
+		MPI_Isend(&TR_Corner_Send, 1, MPI_FLOAT, dest_rank, 1, comm, &send_req[2]);
+
+		// Recv bottom left corner element of proc to our top right 
+		MPI_Irecv(&BL_Corner_Recv, 1, MPI_FLOAT, dest_rank, 1, comm, &recv_req[2]);
+	} // if(coords[0] > 0 && coords[1] < (dims[1]-1)) {
+
+	// If there is a proc to the top left (if not first row or col) 
+	if(coords[0] > 0 && coords[1] > 0) {
+		// Get coords of proc to top left 
+		dest_coords[0] = coords[0] - 1;
+		dest_coords[1] = coords[1] - 1;
+		MPI_Cart_rank(Grid, dest_coords, &dest_rank);
+
+		// Send top left corner element to proc to our top left
+		MPI_Isend(&TL_Corner_Send, 1, MPI_FLOAT, dest_rank, 1, comm, &send_req[3]);
+
+		// Recv bottom right corner element of proc to our top left
+		MPI_Irecv(&BR_Corner_Recv, 1, MPI_FLOAT, dest_rank, 1, comm, &recv_req[3]);
+	} // if(coords[0] > 0 && coords[1] > 0) {
+
+	//------------------------------------------------------------------
+	// Wait until all sending/receiving has finished
+	for(i = 0; i < 4; i++) {
+		// Wait until send is finished
+		MPI_Wait(&send_req[i], &Corner_Status[2*i]);
+
+		// Wait until recv is finished
+		MPI_Wait(&recv_req[i], &Corner_Status[2*i+1]);
+	} // for(i = 0; i < 4; i++) {
+
+	//------------------------------------------------------------------
+	// splice received borders into x array
+
+	if(coords[0] < (dims[0]-1) && coords[1] < (dims[1]-1)) { // if not bottom row/col
+		// In this case, we received the top left corner of the proc to our bottom right
+		// We want to store this in our bottm right corner element
+		x[N*N-1] = TL_Corner_Recv;
+	} // if(coords[0] < (dims[0]-1) && coords[1] < (dims[1]-1)) {
+
+	if(coords[0] < (dims[0]-1) && coords[1] > 0)  { // if not bottom row/first col
+		// In this case, we received the top right corner element from the proc
+		// to our bottom left. We want to store this in our bottom left corner element
+		x[(N-1)*N] = TR_Corner_Recv;
+	} // if(coords[0] < (dims[0]-1) && coords[1] > 0) { 
+
+	if(coords[0] > 0 && coords[1] < (dims[1]-1)) {	// if not 1st row of last col 
+		// In this casse, we received the bottom left corner element from the proc to our 
+		// upper right. We want to store this element in our upper right corener element.
+		x[N-1] = BL_Corner_Recv;
+	} // if(coords[0] > 0 && coords[1] < (dims[1]-1)) {	
+
+	if(coords[0] > 0 && coords[1] > 0) {			// if not 1st row/col
+		// In this casse, we received the bottom right corner element from the proc to our 
+		// upper left. We want to store this element in our upper left corener element.
+		x[0] = BR_Corner_Recv;
+	} // if(coords[0] > 0 && coords[1] > 0) {
+
+	////////////////////////////////////////////////////////////////////////////////
 	// Smooth the matrix and get local count. 
+
+	sleep(1*rank+1);
+	Print_Matrix(x,y,N);
 
 	// Smooth matrix and time it
 	if(rank == root) { timer = clock(); }
@@ -373,7 +493,7 @@ void Initialize(float *x,unsigned int n) {
  		printf("\n");
  	} // for(i = 0; i < n; i++) {
 
- 	printf("\n \n");			// create some space between the two matricies
+ 	/*printf("\n \n");			// create some space between the two matricies
 
   	for(i = 1; i < (n-1); i++) {	// only print interior elements
   		 printf("\n\t");
@@ -381,5 +501,7 @@ void Initialize(float *x,unsigned int n) {
  			printf(" %.3f ",y[i*n+j]);
  		} // for(j = 1; j < (n-1); j++) {
  	} // for(i = 1; i < (n-1); i++) {
+ 	*/
  	printf("\n");
+
  } // void Print_Matrix(float *x, float *y,unsigned int n) {

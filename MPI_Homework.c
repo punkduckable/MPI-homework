@@ -15,8 +15,6 @@ void Print_Matrix(float *x, float  *y, unsigned int n);
 void Edge_Splice(float *x, MPI_Comm Grid, int *dims);
 void Corner_Splice(float *x, MPI_Comm Grid, int *dims);
 
-
-
 int main(int argc, char **argv) {
 	// MPI variables
 	MPI_Comm comm = MPI_COMM_WORLD;
@@ -46,6 +44,10 @@ int main(int argc, char **argv) {
 
 	// Set up dims array depending on number of procs
 	switch(n_procs) {
+		case 1: 
+			dims[0] = 1;	// rows
+			dims[1] = 1;	// cols
+			break;
 		case 2:
 			dims[0] = 1;	// rows
 			dims[1] = 2;	// cols

@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 	Corner_Splice(x, Grid, dims);
 
 	////////////////////////////////////////////////////////////////////////////////
-	// Smooth the matrix and get local count. 
+	// Smooth the matrix and get local count. Reduce to get global counts
 
 	//sleep(1*rank+1);				// For testing
 	//Print_Matrix(x,y,N);
@@ -157,20 +157,17 @@ int main(int argc, char **argv) {
 	// Count number of elements in x,y below t.
 	if(rank == root) { timer = clock(); }
 	Count(x,N,t,&count_x_local);
+	MPI_Reduce(&count_x_local, &count_x, 1, MPI_INT, MPI_SUM, root, comm);	// Reduce to get global x count
 	if(rank == root) { t_count_x = clock() - timer; }
 
 	if(rank == root) { timer = clock(); }
 	Count(y,N,t,&count_y_local);
+	MPI_Reduce(&count_y_local, &count_y, 1, MPI_INT, MPI_SUM, root, comm);	// Reduce to get global y count
 	if(rank == root) { t_count_y = clock() - timer; }
 
 	// Finish runtime timer
 	if(rank == root) { t_runtime = clock() - runtime_timer; }
 
-	////////////////////////////////////////////////////////////////////////////////
-	// Reduce the local counts, get global counts
-
-	MPI_Reduce(&count_x_local, &count_x, 1, MPI_INT, MPI_SUM, root, comm);
-	MPI_Reduce(&count_y_local, &count_y, 1, MPI_INT, MPI_SUM, root, comm);
 
 	////////////////////////////////////////////////////////////////////////////////
 	// Print results
@@ -178,32 +175,33 @@ int main(int argc, char **argv) {
 	// Print how long these various operations took.
 	if(rank == root) {
 		printf(" --= Summary =-- \n");
-		printf("Elements in a row/column \t::\t%d\n",N);
-		printf("Inner elements in a row/col \t::\t%d\n",(N-2));
-		printf("Total elements \t\t\t::\t%d\n",(N*N));
-		printf("Memory used per node\t::\t%f (Gb)\n",Ar_Size);
-		printf("threshold \t\t\t::\t%f\n",t);
-		printf("Smoothing constants (a,b,c) \t::\t(%f,\t%f,\t%f)\n",a,b,c);
-		printf("Number of elements below threshold (X)\t\t::\t%d\n",count_x);
-		printf("Proportion of elements below threshold (X)\t::\t%f\n",(((float)count_x)/((float)n_procs*N*N)));
-		printf("Number of elements below threshold (Y)\t\t::\t%d\n",count_y);
-		printf("Proportion of elements below threshold (Y)\t::\t%f\n",(((float)count_y)/((float)n_procs*(N-2)*(N-2))));
+		printf("Number of nodes             ::    %d\n",n_procs);
+		printf("Elements in a row/column    ::    %d\n",N);
+		printf("Inner elements in a row/col ::    %d\n",(N-2));
+		printf("Total elements              ::    %d\n",(N*N));
+		printf("Memory used per node        ::    %f (Gb)\n",Ar_Size);
+		printf("threshold                   ::    %f\n",t);
+		printf("Smoothing constants (a,b,c) ::   (%f,\t%f,\t%f)\n",a,b,c);
+		printf("Number of elements below threshold (X)      ::    %d\n",count_x);
+		printf("Proportion of elements below threshold (X)  ::    %.4e\n",(((float)count_x)/((float)n_procs*N*N)));
+		printf("Number of elements below threshold (Y)      ::    %d\n",count_y);
+		printf("Proportion of elements below threshold (Y)  ::    %.4e\n",(((float)count_y)/((float)n_procs*(N-2)*(N-2))));
 
 
 		printf("\n--= Actions =-- \n");
-		printf("Allocating x took\t::\t%f (s).\n"
+		printf("Allocating x took           ::    %.2f (s)\n"
 			,(float)(t_alloc_x)/((float)CLOCKS_PER_SEC));
-		printf("Acllocating y took\t::\t%f (s).\n"
+		printf("Acllocating y took          ::    %.2f (s)\n"
 			,(float)(t_alloc_y)/((float)CLOCKS_PER_SEC));
-		printf("Initializing x took\t::\t%f (s).\n"
+		printf("Initializing x took         ::    %.2f (s)\n"
 			,(float)(t_init_x)/(CLOCKS_PER_SEC));
-		printf("Smoothing x into y took\t::\t%f (s).\n"
+		printf("Smoothing x into y took     ::    %.2f (s)\n"
 			,(float)(t_smooth)/(CLOCKS_PER_SEC));
-		printf("Counting x took \t::\t%f (s).\n"
+		printf("Counting x took             ::    %.2f (s)\n"
 			,(float)(t_count_x)/(CLOCKS_PER_SEC));
-		printf("Counting y took \t::\t%f (s).\n"
+		printf("Counting y took             ::    %.2f (s)\n"
 			,(float)(t_count_y)/(CLOCKS_PER_SEC));
-		printf("Total runtime \t::\t%f (s).\n"
+		printf("Total runtime               ::    %.2f (s)\n"
 			,(float)(t_runtime)/(CLOCKS_PER_SEC));
 	} // if(rank == root) {
 

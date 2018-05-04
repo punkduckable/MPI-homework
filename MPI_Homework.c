@@ -21,7 +21,9 @@ int main(int argc, char **argv) {
 	int rank, n_procs, root = 0;
 
 	// Timing variables
-	time_t timer, runtime_timer, t_alloc_x, t_alloc_y, t_init_x, t_smooth, t_count_x, t_count_y, t_runtime;
+	time_t timer, runtime_timer;
+	time_t t_alloc_x_local, t_alloc_y_local, t_init_x_local, t_smooth_local, t_count_x_local, t_count_y_local;
+	time_t t_alloc_x, t_alloc_y, t_init_x, t_smooth, t_count_x, t_count_y, t_runtime;
 
 	// Loop variables
 	int i;
@@ -73,7 +75,7 @@ int main(int argc, char **argv) {
 			dims[1] = 8;	// cols
 			break;
 		default:
-			printf("Pick a different number of dimensions!");
+			if(rank == root) { printf("Pick a different number of dimensions!"); }
 			return 0;
 	} // switch(n_procs) {
 
@@ -122,21 +124,21 @@ int main(int argc, char **argv) {
 	int count_x_local = 0, count_y_local = 0, count_x, count_y;
 
 	// Allocate matricies and time it
-	if(rank == root) { timer = clock(); }
+	timer = clock();
 	x = (float *)malloc(sizeof(float)*N*N); 
-	if(rank == root) { t_alloc_x = clock() - timer; }
+	t_alloc_x_local = clock() - timer;
 
-	if(rank == root) { timer = clock(); }
+	timer = clock();
 	y = (float *)malloc(sizeof(float)*N*N);
-	if(rank == root) { t_alloc_y = clock() - timer; }
+	t_alloc_y_local = clock() - timer;
 
 	// Calculate size of arrays in GB (only on root)
 	if(rank == root) { Ar_Size = ((float)sizeof(float)*N*N)/((float)1024*1024*1024); }
 
 	// Initialize matrix and time it.
-	if(rank == root) { timer = clock(); }
+	timer = clock();
 	Initialize(x,N);
-	if(rank == root) { t_init_x = clock()-timer; }
+	t_init_x_local = clock()-timer;
 
 	////////////////////////////////////////////////////////////////////////////////
 	// Splice together grids
@@ -150,22 +152,32 @@ int main(int argc, char **argv) {
 	//Print_Matrix(x,y,N);
 
 	// Smooth matrix and time it
-	if(rank == root) { timer = clock(); }
+	timer = clock(); 
 	Smooth(x,y,N,a,b,c);
-	if(rank == root) { t_smooth = clock() - timer; }
+	t_smooth_local = clock() - timer; 
 
 	// Count number of elements in x,y below t.
-	if(rank == root) { timer = clock(); }
+	timer = clock(); 
 	Count(x,N,t,&count_x_local);
 	MPI_Reduce(&count_x_local, &count_x, 1, MPI_INT, MPI_SUM, root, comm);	// Reduce to get global x count
-	if(rank == root) { t_count_x = clock() - timer; }
+	t_count_x_local = clock() - timer; 
 
-	if(rank == root) { timer = clock(); }
+	timer = clock(); 
 	Count(y,N,t,&count_y_local);
 	MPI_Reduce(&count_y_local, &count_y, 1, MPI_INT, MPI_SUM, root, comm);	// Reduce to get global y count
-	if(rank == root) { t_count_y = clock() - timer; }
+	t_count_y_local = clock() - timer; 
 
-	// Finish runtime timer
+	////////////////////////////////////////////////////////////////////////////////
+	// Reduce timing data
+
+	MPI_Reduce(&t_alloc_x_local,&t_alloc_x,1,MPI_INT, MPI_SUM, root, comm);
+	MPI_Reduce(&t_alloc_y_local,&t_alloc_y,1,MPI_INT, MPI_SUM, root, comm);
+	MPI_Reduce(&t_init_x_local,&t_init_x,1,MPI_INT, MPI_SUM, root, comm);
+	MPI_Reduce(&t_smooth_local,&t_smooth,1,MPI_INT, MPI_SUM, root, comm);
+	MPI_Reduce(&t_count_x_local,&t_count_x,1,MPI_INT, MPI_SUM, root, comm);
+	MPI_Reduce(&t_count_y_local,&t_count_y,1,MPI_INT, MPI_SUM, root, comm);
+
+	// Finish runtime timer (on root)
 	if(rank == root) { t_runtime = clock() - runtime_timer; }
 
 
@@ -190,19 +202,19 @@ int main(int argc, char **argv) {
 
 		printf("\n--= Actions =-- \n");
 		printf("Allocating x took           ::    %.2f (s)\n"
-			,(float)(t_alloc_x)/((float)CLOCKS_PER_SEC));
-		printf("Acllocating y took          ::    %.2f (s)\n"
-			,(float)(t_alloc_y)/((float)CLOCKS_PER_SEC));
+			,(float)(t_alloc_x)/((float)CLOCKS_PER_SEC*n_procs));
+		printf("Allocating y took          ::    %.2f (s)\n"
+			,(float)(t_alloc_y)/((float)CLOCKS_PER_SEC*n_procs));
 		printf("Initializing x took         ::    %.2f (s)\n"
-			,(float)(t_init_x)/(CLOCKS_PER_SEC));
+			,(float)(t_init_x)/((float)CLOCKS_PER_SEC*n_procs));
 		printf("Smoothing x into y took     ::    %.2f (s)\n"
-			,(float)(t_smooth)/(CLOCKS_PER_SEC));
+			,(float)(t_smooth)/((float)CLOCKS_PER_SEC*n_procs));
 		printf("Counting x took             ::    %.2f (s)\n"
-			,(float)(t_count_x)/(CLOCKS_PER_SEC));
+			,(float)(t_count_x)/((float)CLOCKS_PER_SEC*n_procs));
 		printf("Counting y took             ::    %.2f (s)\n"
-			,(float)(t_count_y)/(CLOCKS_PER_SEC));
+			,(float)(t_count_y)/((float)CLOCKS_PER_SEC*n_procs));
 		printf("Total runtime               ::    %.2f (s)\n"
-			,(float)(t_runtime)/(CLOCKS_PER_SEC));
+			,(float)(t_runtime)/((float)CLOCKS_PER_SEC));
 	} // if(rank == root) {
 
 	/*
